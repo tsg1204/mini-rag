@@ -45,75 +45,104 @@ if (missingVars.length > 0) {
 	process.exit(1);
 }
 
-import { ContentScraper } from '../services/contentScraper';
-import { vectorizeContent } from '../services/vectorize/vectorize-articles';
 import { DataProcessor } from '../libs/dataProcessor';
+import { openaiClient } from '../libs/openai/openai';
+import { pineconeClient } from '../libs/pinecone';
 
-async function main() {
-	console.log('Starting content scraping and vectorization process...');
+/**
+ * Simple function to scrape URLs and vectorize content to Pinecone
+ */
+async function scrapeAndVectorize(urls: string[]) {
+	console.log('Starting content scraping and vectorization...');
 	console.log(`Started at: ${new Date().toISOString()}`);
 
 	try {
-		const scraper = new ContentScraper();
+		// Step 1: Scrape and chunk the content
+		console.log(`\n📥 Scraping ${urls.length} URLs...`);
+		const processor = new DataProcessor();
+		const chunks = await processor.processUrls(urls);
 
-		const urls = [
-			'https://nextjs.org/docs/getting-started',
-			'https://react.dev/learn',
-			'https://www.typescriptlang.org/docs/',
-			'https://www.typescriptlang.org/docs/handbook/2/mapped-types.html',
-			'https://www.typescriptlang.org/docs/handbook/2/keyof-types.html',
-			'https://docs.pinecone.io/docs/overview',
-			'https://docs.pinecone.io/guides/index-data/create-an-index',
-			'https://nextjs.org/docs/app/getting-started/fetching-data',
-		];
-
-		console.log('Scraping content sources...');
-		const items = await scraper.scrapeMultipleUrls(urls);
-
-		console.log(`Successfully scraped ${items.length} content items`);
-
-		if (items.length === 0) {
+		if (chunks.length === 0) {
 			console.log('No content found to process');
 			return;
 		}
 
-		// Process each content item
-		console.log('Starting vectorization process...');
+		console.log(`\n✅ Created ${chunks.length} chunks from content`);
 
-		const chunks = await new DataProcessor().processUrls(urls);
+		// Step 2: Generate embeddings and upload to Pinecone
+		console.log('\n🔄 Generating embeddings and uploading to Pinecone...');
+		const indexName = process.env.PINECONE_INDEX;
+		if (!indexName) {
+			throw new Error('PINECONE_INDEX environment variable not set');
+		}
 
-		let successfulChunks = 0;
-		let failedChunks = 0;
+		const index = pineconeClient.Index(indexName);
+		const batchSize = 100;
+		let successCount = 0;
+		let failCount = 0;
 
-		for (const chunk of chunks) {
-			console.log(`Vectorizing chunk ${chunk.metadata.url}`);
+		for (let i = 0; i < chunks.length; i += batchSize) {
+			const batch = chunks.slice(i, i + batchSize);
+			console.log(
+				`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)}...`
+			);
+
 			try {
-				await vectorizeContent(chunk);
-				console.log(
-					`Successfully vectorized chunk ${chunk.metadata.url}`
-				);
-				successfulChunks++;
+				// Generate embeddings for the batch
+				const embeddingResponse = await openaiClient.embeddings.create({
+					model: 'text-embedding-3-small',
+					input: batch.map((chunk) => chunk.content),
+				});
+
+				// Prepare vectors for Pinecone
+				const vectors = batch.map((chunk, idx) => ({
+					id: `${chunk.metadata.url}-${chunk.metadata.chunkIndex}`,
+					values: embeddingResponse.data[idx].embedding,
+					metadata: {
+						text: chunk.content,
+						url: chunk.metadata.url || '',
+						title: chunk.metadata.title || '',
+						chunkIndex: chunk.metadata.chunkIndex || 0,
+						totalChunks: chunk.metadata.totalChunks || 0,
+					},
+				}));
+
+				// Upload to Pinecone
+				await index.upsert(vectors);
+				successCount += batch.length;
+				console.log(`✅ Uploaded ${batch.length} vectors`);
 			} catch (error) {
-				failedChunks++;
-				console.error(
-					`Failed to vectorize chunk ${chunk.metadata.url}:`,
-					error
-				);
+				failCount += batch.length;
+				console.error(`❌ Failed to process batch:`, error);
 			}
 		}
 
 		// Print summary
-		console.log('\nSCRAPING SUMMARY');
+		console.log('\n📊 SUMMARY');
 		console.log('==================');
-		console.log(`Total items: ${chunks.length}`);
-		console.log(`Successful chunks: ${successfulChunks}`);
-		console.log(`Failed chunks: ${failedChunks}`);
+		console.log(`Total chunks: ${chunks.length}`);
+		console.log(`Successful: ${successCount}`);
+		console.log(`Failed: ${failCount}`);
 		console.log(`Completed at: ${new Date().toISOString()}`);
 	} catch (error) {
-		console.error('Critical error during scraping:', error);
+		console.error('❌ Critical error:', error);
+		throw error;
 	}
+}
 
-	console.log('Finished scraping and vectorizing content.');
+async function main() {
+	const urls = [
+		'https://nextjs.org/docs/getting-started',
+		'https://react.dev/learn',
+		'https://www.typescriptlang.org/docs/',
+		'https://www.typescriptlang.org/docs/handbook/2/mapped-types.html',
+		'https://www.typescriptlang.org/docs/handbook/2/keyof-types.html',
+		'https://docs.pinecone.io/docs/overview',
+		'https://docs.pinecone.io/guides/index-data/create-an-index',
+		'https://nextjs.org/docs/app/getting-started/fetching-data',
+	];
+
+	await scrapeAndVectorize(urls);
 }
 
 // Execute main function with error handling

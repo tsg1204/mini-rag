@@ -56,7 +56,7 @@ export const searchDocuments = async (
 
 	// Convert the search query into a vector embedding using OpenAI
 	const queryEmbedding = await openaiClient.embeddings.create({
-		model: 'text-embedding-3-small', // TRY CHANGING: 'text-embedding-3-large' for better quality (costs more)
+		model: 'text-embedding-3-small',
 		dimensions: 512,
 		input: query,
 	});

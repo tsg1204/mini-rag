@@ -1,29 +1,73 @@
-import { typedRoute } from '@/app/api/typedRoute';
-import { selectAgent } from '@/app/libs/openai/agents/selector-agent';
+import { NextRequest, NextResponse } from 'next/server';
 import { openaiClient } from '@/app/libs/openai/openai';
+import { zodResponseFormat } from 'openai/helpers/zod';
+import { z } from 'zod';
+import { agentTypeSchema, messageSchema } from '@/app/agents/types';
+import { agentConfigs } from '@/app/agents/config';
 
-export const POST = typedRoute('SELECT-AGENT', async ({ userQuery, audio }) => {
-	if (audio) {
-		const audioTranscription =
-			await openaiClient.audio.transcriptions.create({
-				file: new File([audio], 'audio.webm', {
-					type: 'audio/webm',
-				}),
-				model: 'whisper-1',
-				response_format: 'json',
-				language: 'en',
-			});
+const selectAgentSchema = z.object({
+	messages: z.array(messageSchema).min(1),
+});
 
-		if (!audioTranscription.text) {
-			throw new Error('Failed to transcribe audio');
+const agentSelectionSchema = z.object({
+	agent: agentTypeSchema,
+	query: z.string(),
+});
+
+export async function POST(req: NextRequest) {
+	try {
+		const body = await req.json();
+		const parsed = selectAgentSchema.parse(body);
+		const { messages } = parsed;
+
+		// Take last 5 messages for context
+		const recentMessages = messages.slice(-5);
+
+		// Build agent descriptions from config
+		const agentDescriptions = Object.entries(agentConfigs)
+			.map(([key, config]) => `- "${key}": ${config.description}`)
+			.join('\n');
+
+		// Summarize conversation and determine agent
+		const completion = await openaiClient.chat.completions.create({
+			model: 'gpt-4o-mini',
+			messages: [
+				{
+					role: 'system',
+					content: `You are an agent router. Based on the conversation history, determine which agent should handle the request and create a focused query.
+
+Available agents:
+${agentDescriptions}
+
+The query should be a refined, clear version of what the user wants, removing conversational fluff.`,
+				},
+				...recentMessages.map((msg) => ({
+					role: msg.role,
+					content: msg.content,
+				})),
+			],
+			response_format: zodResponseFormat(
+				agentSelectionSchema,
+				'agentSelection'
+			),
+		});
+
+		const content = completion.choices[0]?.message?.content;
+		if (!content) {
+			throw new Error('No response from OpenAI');
 		}
 
-		return selectAgent(audioTranscription.text);
-	}
+		const result = agentSelectionSchema.parse(JSON.parse(content));
 
-	if (!userQuery) {
-		throw new Error('No user query provided');
+		return NextResponse.json({
+			agent: result.agent,
+			query: result.query,
+		});
+	} catch (error) {
+		console.error('Error selecting agent:', error);
+		return NextResponse.json(
+			{ error: 'Failed to select agent' },
+			{ status: 500 }
+		);
 	}
-
-	return selectAgent(userQuery);
-});
+}

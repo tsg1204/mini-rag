@@ -1,9 +1,7 @@
 import { z } from 'zod';
 
-export const agentSchema = z
-	.literal('knowledgeBase')
-	.or(z.literal('linkedin'))
-	.or(z.literal('general'));
+export const agentSchema = z.literal('knowledgeBase').or(z.literal('linkedin'));
+
 export type AgentType = z.infer<typeof agentSchema>;
 
 export type AgentConfig = {
@@ -36,13 +34,6 @@ export const AGENT_CONFIG: Record<AgentType, AgentConfig> = {
 		name: 'knowledgeBase',
 		description:
 			'Queries the knowledge base for information about coding, software development, and technology.',
-	},
-	general: {
-		// Base model: Handles everything else
-		// TRY CHANGING: Different models based on your needs and budget
-		model: 'gpt-4o-mini',
-		name: 'general',
-		description: 'Handles general queries using the base model',
 	},
 };
 

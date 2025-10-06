@@ -2,6 +2,7 @@ import { selectAgent } from '../selector-agent';
 import { AGENT_CONFIG } from '../types';
 
 describe('selectAgent', () => {
+	// TODO: add some test for queries which should NOT be supported
 	const testCases = [
 		{
 			name: 'should select LinkedIn agent for LinkedIn-related queries',
@@ -14,18 +15,6 @@ describe('selectAgent', () => {
 			query: 'Why are enums in TypeScript useful?',
 			expectedAgent: 'knowledgeBase',
 			expectedModel: AGENT_CONFIG.knowledgeBase.model,
-		},
-		{
-			name: 'should select general agent for generic queries',
-			query: 'What is a recipe for a good lasagna?',
-			expectedAgent: 'general',
-			expectedModel: AGENT_CONFIG.general.model,
-		},
-		{
-			name: 'should select General agent for non-specialized queries',
-			query: 'What is the capital of France?',
-			expectedAgent: 'general',
-			expectedModel: AGENT_CONFIG.general.model,
 		},
 	];
 
