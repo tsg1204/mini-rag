@@ -79,9 +79,21 @@ Add to your `.env` or `.env.local`:
 HELICONE_API_KEY=sk-helicone-xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-### Step 3: Verify OpenAI Client Configuration
+### Step 3: Update OpenAI Client
 
-**Good news!** Helicone is already integrated in this codebase. Check `app/libs/openai/openai.ts`:
+The integration is incredibly simple. Update `app/libs/openai/openai.ts`:
+
+**Before:**
+
+```typescript
+import OpenAI from 'openai';
+
+export const openaiClient = new OpenAI({
+	apiKey: process.env.OPENAI_API_KEY as string,
+});
+```
+
+**After:**
 
 ```typescript
 import OpenAI from 'openai';
@@ -92,12 +104,7 @@ export const openaiClient = new OpenAI({
 });
 ```
 
-**What this does:**
-- All OpenAI API calls automatically route through Helicone's proxy
-- Logs are captured automatically without any code changes
-- Zero performance impact on your application
-
-If you're building from scratch, you just need to add the `baseURL` parameter - that's it!
+**That's it!** All OpenAI API calls now flow through Helicone's proxy and get logged.
 
 ---
 
