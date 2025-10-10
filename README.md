@@ -2,6 +2,42 @@
 
 A full-stack TypeScript application demonstrating modern AI techniques including RAG (Retrieval Augmented Generation), fine-tuning, agents, and LLM observability with automated web scraping capabilities.
 
+## Prerequisites
+
+Before getting started, you'll need to set up the following services:
+
+### Required API Keys
+
+1. **OpenAI API Key** (https://platform.openai.com/api-keys)
+   - You'll need at least $5 in credits on your OpenAI account
+   - Used for embeddings, chat completions, and fine-tuning
+
+2. **Pinecone API Key** (https://www.pinecone.io/)
+   - Free tier available
+   - Used for vector database storage and similarity search
+
+3. **Helicone API Key** (https://www.helicone.ai/)
+   - Free tier available
+   - Used for LLM observability and monitoring
+
+Create a `.env` file in the root directory with these keys:
+
+```
+OPENAI_API_KEY=your_openai_key_here
+PINECONE_API_KEY=your_pinecone_key_here
+HELICONE_API_KEY=your_helicone_key_here
+PINECONE_INDEX=your_index_name
+OPENAI_FINETUNED_MODEL=your_finetuned_model_id (optional)
+```
+
+### Recommended Learning Resources
+
+Before diving into the code, we highly recommend watching 3Blue1Brown's series on neural networks and embeddings to build intuition for how these systems work:
+
+- [Neural Networks Series](https://www.youtube.com/playlist?list=PLZHQObOWTQDNU6R1_67000Dx_ZCJB-3pi) - Visual introduction to neural networks
+- [But what is a GPT?](https://www.youtube.com/watch?v=wjZofJX0v4M) - Understanding transformer architecture
+- [Visualizing Attention](https://www.youtube.com/watch?v=eMlx5fFNoYc) - How attention mechanisms work
+
 ## Features
 
 -   **Multi-Agent System**: 2 specialized agents for different content types:
