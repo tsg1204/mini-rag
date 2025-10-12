@@ -260,7 +260,7 @@ yarn test
 
 This repo is a preview of the full hands-on program where we build AI applications together as a group. You'll get live support, code reviews, and build production-ready AI systems alongside other developers.
 
-**[Reserve your spot here →](https://buy.stripe.com/eVqeVe6FSaI3aEWdWX)**
+**[Reserve your spot here →](https://buy.stripe.com/eVqeVe6FSaI3aEWdWXdjO0i)**
 
 ---
 
