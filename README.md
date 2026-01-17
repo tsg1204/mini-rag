@@ -268,3 +268,34 @@ This repo is a preview of the full hands-on program where we build AI applicatio
 -   [Helicone Documentation](https://docs.helicone.ai)
 -   [Vercel AI SDK](https://sdk.vercel.ai/docs)
 -   [Next.js Documentation](https://nextjs.org/docs)
+    
+## Pinecone vs Qdrant 
+Pinecone is easier and more polished; Qdrant is more flexible and cost-efficient.
+
+
+## Chunking Strategy
+
+Core Principles (apply to everything)
+    One idea per chunk
+    Chunks should stand alone (readable without surrounding text)
+    Context travels with the chunk (title, source, date, type)
+    Chunk size follows content length, not a single fixed rule
+
+Articles (Long-Form Content) Strategy
+    Structure-aware chunking
+    Split articles by logical sections (headings or topic shifts)
+    Each chunk represents one coherent concept or argument
+    Intro and conclusion are treated as separate, high-value chunks
+
+LinkedIn Posts (Short-Form Content) Strategy
+    Whole-post chunking by default
+    One post = one chunk
+    Post text is preserved as-is, with minimal normalization
+    Context is critical and must be attached to each chunk
+
+    When to split
+        Only if the post clearly contains:
+        A framework (steps, numbered ideas)
+        Distinct sections (hook → story → lessons)
+
+Articles are chunked by meaning and structure; LinkedIn posts are chunked by intent and context.
