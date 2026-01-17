@@ -122,7 +122,26 @@ export function chunkText(
 function getLastWords(text: string, maxLength: number): string {
 	// TODO: Implement this function!
 	// YOUR CODE HERE
-
-	// Placeholder return - replace with your implementation
-	throw new Error('getLastWords not implemented yet!');
+		//If text is already short, return it
+		if (text.length <= maxLength) {
+			return text;
+		}
+		//Split text into words
+		const words = text.split(' ');
+	
+		let result = '';
+	
+		//Loop backwards through the words
+		for (let i = words.length - 1; i >= 0; i--) {
+			const word = words[i];
+			//new result
+			const candidate = result === '' ? word : `${word} ${result}`;
+	
+			//Check if adding this word would exceed maxLength
+			if (candidate.length > maxLength) {
+				break;
+			}
+			result = candidate;
+		}
+		return result;
 }
