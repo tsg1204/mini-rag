@@ -276,22 +276,22 @@ Pinecone is easier and more polished; Qdrant is more flexible and cost-efficient
 ## Chunking Strategy
 
 Core Principles (apply to everything)
-    One idea per chunk
-    Chunks should stand alone (readable without surrounding text)
-    Context travels with the chunk (title, source, date, type)
-    Chunk size follows content length, not a single fixed rule
+    - One idea per chunk
+    - Chunks should stand alone (readable without surrounding text)
+    - Context travels with the chunk (title, source, date, type)
+    - Chunk size follows content length, not a single fixed rule
 
 Articles (Long-Form Content) Strategy
-    Structure-aware chunking
-    Split articles by logical sections (headings or topic shifts)
-    Each chunk represents one coherent concept or argument
-    Intro and conclusion are treated as separate, high-value chunks
+    - Structure-aware chunking
+    - Split articles by logical sections (headings or topic shifts)
+    - Each chunk represents one coherent concept or argument
+    - Intro and conclusion are treated as separate, high-value chunks
 
 LinkedIn Posts (Short-Form Content) Strategy
-    Whole-post chunking by default
-    One post = one chunk
-    Post text is preserved as-is, with minimal normalization
-    Context is critical and must be attached to each chunk
+    - Whole-post chunking by default
+    - One post = one chunk
+    - Post text is preserved as-is, with minimal normalization
+    - Context is critical and must be attached to each chunk
 
     When to split
         Only if the post clearly contains:
