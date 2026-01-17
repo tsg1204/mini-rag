@@ -1,3 +1,5 @@
+import * as cheerio from 'cheerio';
+
 export type Chunk = {
 	id: string;
 	content: string;
@@ -145,3 +147,64 @@ function getLastWords(text: string, maxLength: number): string {
 		}
 		return result;
 }
+
+export type MediumArticle = {
+	text: string;
+	url: string;
+	author: string;
+	title: string;
+	date: string;
+	source: string;
+	language: string;
+}
+
+/**
+ * Extracts article data from a Medium HTML export
+ * @param html The HTML content of a Medium article export
+ * @returns A MediumArticle object with extracted data
+ */
+export function extraMediumArticle(html: string): MediumArticle {
+	const $ = cheerio.load(html);
+
+	// Extract title from h1.p-name
+	const title = $('h1.p-name').text().trim() || '';
+
+	// Extract author from footer a.p-author
+	const author = $('footer a.p-author.h-card').text().trim() || '';
+
+	// Extract date from footer time.dt-published
+	const dateTime = $('footer time.dt-published').attr('datetime') || '';
+	const dateText = $('footer time.dt-published').text().trim() || dateTime;
+	const date = dateText;
+
+	// Extract URL from footer a.p-canonical
+	const url = $('footer a.p-canonical').attr('href') || '';
+
+	// Extract text content from section[data-field="body"]
+	const bodySection = $('section[data-field="body"].e-content');
+	const paragraphs: string[] = [];
+	
+	bodySection.find('p').each((_index: number, elem) => {
+		const text = $(elem).text().trim();
+		if (text) {
+			paragraphs.push(text);
+		}
+	});
+
+	const text = paragraphs.join(' ').trim();
+
+	// Extract language from html lang attribute or default to 'en'
+	const language = $('html').attr('lang') || 'en';
+
+	return {
+		text,
+		url,
+		author,
+		title,
+		date,
+		source: 'medium',
+		language,
+	};
+}
+
+
