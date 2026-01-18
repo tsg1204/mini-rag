@@ -2,8 +2,7 @@
  * LinkedIn Posts Upload Script
  *
  * Reads a LinkedIn CSV export from:
- *   app/scripts/data/linkedin-posts.csv
- * (or whatever filename you set below),
+ *   app/scripts/data/brian_posts.csv
  * extracts posts using extractLinkedInPosts(),
  * chunks the post text, generates embeddings, and uploads to Qdrant.
  *
