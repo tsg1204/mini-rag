@@ -21,7 +21,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 import fs from 'fs';
 import path from 'path';
-import { extraMediumArticle, chunkText, Chunk } from '../libs/chunking';
+import { QdrantClient } from '@qdrant/js-client-rest';
+import { extraMediumArticle, chunkText, Chunk, extractLinkedInPosts } from '../libs/chunking';
 import { openaiClient } from '../libs/openai/openai';
 
 
@@ -122,7 +123,7 @@ function prepareQdrantVectors(processedArticle: ProcessedArticle) {
 	const { article, chunks, embeddings } = processedArticle;
 
 	return chunks.map((chunk, index) => ({
-		id: chunk.id,
+		id: crypto.randomUUID(),
 		vector: embeddings[index],
 		payload: {
 			text: chunk.content,
@@ -141,19 +142,85 @@ function prepareQdrantVectors(processedArticle: ProcessedArticle) {
 }
 
 /**
- * Uploads vectors to Qdrant
- * TODO: Implement Qdrant client and upload
+ * Initializes Qdrant client
  */
-async function uploadToQdrant(vectors: ReturnType<typeof prepareQdrantVectors>) {
-	// Placeholder for Qdrant upload
-	console.log(`  📤 Prepared ${vectors.length} vectors for Qdrant upload`);
-	console.log('  ⚠️  Qdrant upload not implemented yet');
-	
-	// TODO: Initialize Qdrant client
-	// TODO: Connect to Qdrant collection
-	// TODO: Upload vectors using upsert or similar method
-	
-	return vectors.length;
+function initializeQdrantClient(): QdrantClient {
+	const url = process.env.QDRANT_URL || 'http://localhost:6333';
+	const apiKey = process.env.QDRANT_API_KEY;
+
+	const client = new QdrantClient({
+		url,
+		...(apiKey && { apiKey }),
+	});
+
+	return client;
+}
+
+/**
+ * Ensures the Qdrant collection exists, creates it if it doesn't
+ */
+async function ensureCollection(
+	client: QdrantClient,
+	collectionName: string
+): Promise<void> {
+	try {
+		// Check if collection exists
+		await client.getCollection(collectionName);
+		console.log(`  ✓ Collection "${collectionName}" already exists`);
+	} catch (error) {
+		// Collection doesn't exist, create it
+		const errorObj = error as { status?: number; message?: string };
+		if (errorObj.status === 404 || errorObj.message?.includes('not found')) {
+			console.log(`  📦 Creating collection "${collectionName}"...`);
+			await client.createCollection(collectionName, {
+				vectors: {
+					size: 512, // Match embedding dimensions
+					distance: 'Cosine' as const,
+				},
+			});
+			console.log(`  ✅ Collection "${collectionName}" created`);
+		} else {
+			throw error;
+		}
+	}
+}
+
+/**
+ * Uploads vectors to Qdrant
+ */
+async function uploadToQdrant(
+	client: QdrantClient,
+	collectionName: string,
+	vectors: ReturnType<typeof prepareQdrantVectors>
+): Promise<number> {
+	// Ensure collection exists
+	await ensureCollection(client, collectionName);
+
+	// Upload vectors in batches (Qdrant recommends batches of 100-200)
+	const batchSize = 100;
+	let uploadedCount = 0;
+
+	for (let i = 0; i < vectors.length; i += batchSize) {
+		const batch = vectors.slice(i, i + batchSize);
+		
+		try {
+			await client.upsert(collectionName, {
+				wait: true, // Wait for the operation to complete
+				points: batch.map((v) => ({
+					id: v.id,
+					vector: v.vector,
+					payload: v.payload,
+				})),
+			});
+			
+			uploadedCount += batch.length;
+		} catch (error) {
+			console.error(`  ❌ Error uploading batch ${i / batchSize + 1}:`, error);
+			throw error;
+		}
+	}
+
+	return uploadedCount;
 }
 
 async function main() {
@@ -162,7 +229,13 @@ async function main() {
 		process.exit(1);
 	}
 
+	// Initialize Qdrant client
+	const qdrantClient = initializeQdrantClient();
+	const collectionName = process.env.QDRANT_COLLECTION || 'medium_articles';
+
 	console.log('🚀 Starting article upload process...\n');
+	console.log(`🔗 Qdrant URL: ${process.env.QDRANT_URL || 'http://localhost:6333'}`);
+	console.log(`📚 Collection: ${collectionName}\n`);
 
 	// Get all article files
 	const articleFiles = getArticleFiles();
@@ -198,16 +271,26 @@ async function main() {
 		// Prepare vectors for Qdrant
 		const vectors = prepareQdrantVectors(processed);
 
-		// Upload to Qdrant (placeholder)
-		const uploadedCount = await uploadToQdrant(vectors);
+		// Upload to Qdrant
+		try {
+			const uploadedCount = await uploadToQdrant(
+				qdrantClient,
+				collectionName,
+				vectors
+			);
 
-		processedCount++;
-		totalChunks += processed.chunks.length;
-		totalVectors += uploadedCount;
+			processedCount++;
+			totalChunks += processed.chunks.length;
+			totalVectors += uploadedCount;
 
-		console.log(
-			`  ✅ Processed: ${processed.chunks.length} chunks, ${uploadedCount} vectors\n`
-		);
+			console.log(
+				`  ✅ Processed: ${processed.chunks.length} chunks, ${uploadedCount} vectors uploaded\n`
+			);
+		} catch (error) {
+			console.error(`  ❌ Failed to upload to Qdrant:`, error);
+			skippedCount++;
+			console.log(`  ⏭️  Skipped\n`);
+		}
 	}
 
 	// Summary

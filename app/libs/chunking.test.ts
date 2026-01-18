@@ -1,4 +1,4 @@
-import { chunkText } from './chunking';
+import { chunkText, extractLinkedInPosts } from './chunking';
 
 describe('chunkText', () => {
 	describe('Basic Functionality', () => {
@@ -254,6 +254,287 @@ describe('chunkText', () => {
 			const allContent = chunks.map((c) => c.content).join(' ');
 			expect(allContent).toContain('useState');
 			expect(allContent).toContain('useEffect');
+		});
+	});
+});
+
+describe('extractLinkedInPosts', () => {
+	describe('Basic Functionality', () => {
+		test('should extract posts from valid CSV', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+"Great post about React!",2024-01-15,https://linkedin.com/posts/123,42
+"Another amazing post",2024-01-16,https://linkedin.com/posts/456,100`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(2);
+			expect(posts[0].text).toBe('Great post about React!');
+			expect(posts[0].date).toBe('2024-01-15');
+			expect(posts[0].url).toBe('https://linkedin.com/posts/123');
+			expect(posts[0].likes).toBe(42);
+
+			expect(posts[1].text).toBe('Another amazing post');
+			expect(posts[1].date).toBe('2024-01-16');
+			expect(posts[1].url).toBe('https://linkedin.com/posts/456');
+			expect(posts[1].likes).toBe(100);
+		});
+
+		test('should handle empty CSV', () => {
+			const posts = extractLinkedInPosts('');
+			expect(posts).toEqual([]);
+		});
+
+		test('should handle CSV with only header', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions`;
+			const posts = extractLinkedInPosts(csv);
+			expect(posts).toEqual([]);
+		});
+
+		test('should handle single post', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+"Single post here",2024-01-15,https://linkedin.com/posts/123,5`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(1);
+			expect(posts[0].text).toBe('Single post here');
+			expect(posts[0].likes).toBe(5);
+		});
+	});
+
+	describe('Header Detection', () => {
+		test('should find columns with case-insensitive matching', () => {
+			const csv = `TEXT,CreatedAt (TZ=America/Los_Angeles),LINK,NumReactions
+"Post content",2024-01-15,https://linkedin.com/posts/123,10`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(1);
+			expect(posts[0].text).toBe('Post content');
+			expect(posts[0].date).toBe('2024-01-15');
+			expect(posts[0].url).toBe('https://linkedin.com/posts/123');
+			expect(posts[0].likes).toBe(10);
+		});
+
+		test('should handle alternative column names', () => {
+			const csv = `post text,created at,url,reactions
+"Alternative names work",2024-01-15,https://linkedin.com/posts/123,25`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(1);
+			expect(posts[0].text).toBe('Alternative names work');
+			expect(posts[0].likes).toBe(25);
+		});
+
+		test('should return empty array if required columns are missing', () => {
+			const csv = `wrong,column,names,here
+"Post content",2024-01-15,https://linkedin.com/posts/123,10`;
+
+			const posts = extractLinkedInPosts(csv);
+			expect(posts).toEqual([]);
+		});
+	});
+
+	describe('Quoted Fields', () => {
+		test('should handle quoted fields with commas', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+"Post with, commas inside",2024-01-15,https://linkedin.com/posts/123,10`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(1);
+			expect(posts[0].text).toBe('Post with, commas inside');
+		});
+
+		test('should handle escaped quotes in quoted fields', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+"Post with ""quotes"" inside",2024-01-15,https://linkedin.com/posts/123,10`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(1);
+			expect(posts[0].text).toBe('Post with "quotes" inside');
+		});
+
+		test('should handle newlines in quoted fields', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+"Post with
+multiple lines",2024-01-15,https://linkedin.com/posts/123,10`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(1);
+			expect(posts[0].text).toContain('Post with');
+			expect(posts[0].text).toContain('multiple lines');
+		});
+	});
+
+	describe('Data Validation', () => {
+		test('should handle missing text or url by skipping row', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+,2024-01-15,,10
+"Valid post",2024-01-16,https://linkedin.com/posts/456,20`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(1);
+			expect(posts[0].text).toBe('Valid post');
+		});
+
+		test('should handle invalid likes by defaulting to 0', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+"Post with invalid likes",2024-01-15,https://linkedin.com/posts/123,not-a-number
+"Post with empty likes",2024-01-16,https://linkedin.com/posts/456,`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(2);
+			expect(posts[0].likes).toBe(0);
+			expect(posts[1].likes).toBe(0);
+		});
+
+		test('should parse numeric likes correctly', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+"Post 1",2024-01-15,https://linkedin.com/posts/123,0
+"Post 2",2024-01-16,https://linkedin.com/posts/456,42
+"Post 3",2024-01-17,https://linkedin.com/posts/789,1000`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts[0].likes).toBe(0);
+			expect(posts[1].likes).toBe(42);
+			expect(posts[2].likes).toBe(1000);
+		});
+
+		test('should trim whitespace from fields', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+"  Post with spaces  ",  2024-01-15  ,  https://linkedin.com/posts/123  ,  50  `;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(1);
+			// Text field is trimmed in extractLinkedInPosts (line 278)
+			expect(posts[0].text).toBe('Post with spaces');
+			expect(posts[0].date).toBe('2024-01-15');
+			expect(posts[0].url).toBe('https://linkedin.com/posts/123');
+			expect(posts[0].likes).toBe(50);
+		});
+	});
+
+	describe('Edge Cases', () => {
+		test('should handle empty rows', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+
+"Valid post",2024-01-15,https://linkedin.com/posts/123,10
+`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(1);
+			expect(posts[0].text).toBe('Valid post');
+		});
+
+		test('should handle CSV with trailing newline', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+"Post content",2024-01-15,https://linkedin.com/posts/123,10
+`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(1);
+			expect(posts[0].text).toBe('Post content');
+		});
+
+		test('should handle CSV with Windows line endings', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions\r\n"Post content",2024-01-15,https://linkedin.com/posts/123,10\r\n`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(1);
+			expect(posts[0].text).toBe('Post content');
+		});
+
+		test('should handle posts with special characters', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+"Post with emoji 🚀 and symbols: @#$%",2024-01-15,https://linkedin.com/posts/123,10`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(1);
+			expect(posts[0].text).toBe('Post with emoji 🚀 and symbols: @#$%');
+		});
+
+		test('should handle very long post text', () => {
+			const longText = 'A'.repeat(10000);
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+"${longText}",2024-01-15,https://linkedin.com/posts/123,10`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(1);
+			expect(posts[0].text).toBe(longText);
+			expect(posts[0].text.length).toBe(10000);
+		});
+	});
+
+	describe('Multiple Posts', () => {
+		test('should extract multiple posts correctly', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+"First post",2024-01-15,https://linkedin.com/posts/1,10
+"Second post",2024-01-16,https://linkedin.com/posts/2,20
+"Third post",2024-01-17,https://linkedin.com/posts/3,30`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(3);
+			expect(posts[0].text).toBe('First post');
+			expect(posts[0].likes).toBe(10);
+			expect(posts[1].text).toBe('Second post');
+			expect(posts[1].likes).toBe(20);
+			expect(posts[2].text).toBe('Third post');
+			expect(posts[2].likes).toBe(30);
+		});
+
+		test('should handle mixed valid and invalid rows', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+"Valid post 1",2024-01-15,https://linkedin.com/posts/1,10
+,2024-01-16,,20
+"Valid post 2",2024-01-17,https://linkedin.com/posts/2,30`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(2);
+			expect(posts[0].text).toBe('Valid post 1');
+			expect(posts[1].text).toBe('Valid post 2');
+		});
+	});
+
+	describe('Real-World Example', () => {
+		test('should extract posts from realistic LinkedIn CSV export', () => {
+			const csv = `text,createdAt (TZ=America/Los_Angeles),link,numReactions
+"Just shipped a new feature! 🚀 Excited to see how users respond.",2024-01-15T10:30:00,https://www.linkedin.com/posts/activity-123,42
+"Reflecting on my journey as a developer. Here's what I learned...",2024-01-20T14:15:00,https://www.linkedin.com/posts/activity-456,128
+"Hot take: TypeScript is worth the extra setup time. Change my mind.",2024-01-25T09:00:00,https://www.linkedin.com/posts/activity-789,256`;
+
+			const posts = extractLinkedInPosts(csv);
+
+			expect(posts).toHaveLength(3);
+			
+			// Verify first post
+			expect(posts[0].text).toContain('Just shipped');
+			expect(posts[0].text).toContain('🚀');
+			expect(posts[0].date).toBe('2024-01-15T10:30:00');
+			expect(posts[0].url).toBe('https://www.linkedin.com/posts/activity-123');
+			expect(posts[0].likes).toBe(42);
+
+			// Verify second post
+			expect(posts[1].text).toContain('Reflecting');
+			expect(posts[1].likes).toBe(128);
+
+			// Verify third post
+			expect(posts[2].text).toContain('Hot take');
+			expect(posts[2].likes).toBe(256);
 		});
 	});
 });

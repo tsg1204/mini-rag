@@ -13,6 +13,25 @@ export type Chunk = {
 	};
 };
 
+export type MediumArticle = {
+	text: string;
+	url: string;
+	author: string;
+	title: string;
+	date: string;
+	source: string;
+	language: string;
+}
+
+// TODO: Define LinkedInPost type
+// Should have: text (string), date (string), url (string), likes (number)
+export type LinkedInPost = {
+	text: string;
+	date: string;
+	url: string;
+	likes: number;
+};
+
 /**
  * Splits text into smaller chunks for processing
  * @param text The text to chunk
@@ -148,15 +167,6 @@ function getLastWords(text: string, maxLength: number): string {
 		return result;
 }
 
-export type MediumArticle = {
-	text: string;
-	url: string;
-	author: string;
-	title: string;
-	date: string;
-	source: string;
-	language: string;
-}
 
 /**
  * Extracts article data from a Medium HTML export
@@ -207,4 +217,201 @@ export function extraMediumArticle(html: string): MediumArticle {
 	};
 }
 
+/**
+ * TODO: Implement extractLinkedInPosts function
+ *
+ * This function should extract LinkedIn posts from CSV data.
+ *
+ * @param csvContent The CSV file content as a string
+ * @returns Array of LinkedInPost objects with text, date, url, and likes
+ *
+ * Requirements:
+ * 1. Parse the CSV header to find column indices for:
+ *    - text: the post content
+ *    - createdAt (TZ=America/Los_Angeles): the date
+ *    - link: the URL
+ *    - numReactions: the number of likes
+ *
+ * 2. Handle CSV parsing properly:
+ *    - Fields can be quoted with double quotes
+ *    - Quoted fields can contain commas
+ *    - Use a simple parser or handle quoted fields manually
+ *
+ * 3. Skip the header row and process each data row
+ *
+ * 4. Return an array of LinkedInPost objects
+ *
+ * Hints:
+ * - Split by newlines to get rows
+ * - For each row, carefully parse considering quoted fields
+ * - Extract the values at the correct column indices
+ * - Convert numReactions to a number using parseInt()
+ */
+/**
+ * Extract LinkedIn posts from CSV data.
+ */
+export function extractLinkedInPosts(csvContent: string): LinkedInPost[] {
+	const rows = splitCsvRows(csvContent);
+	if (rows.length === 0) return [];
 
+	// Header
+	const header = parseCsvRow(rows[0]);
+	const idxText = findHeaderIndex(header, ['text', 'post text', 'content']);
+	const idxDate = findHeaderIndex(header, ['createdat (tz=america/los_angeles)', 'createdat', 'created at']);
+	const idxLink = findHeaderIndex(header, ['link', 'url']);
+	const idxLikes = findHeaderIndex(header, ['numreactions', 'reactions', 'likes']);
+
+	// If required columns aren't found, return empty (or throw, if you prefer strict behavior).
+	if (idxText === -1 || idxDate === -1 || idxLink === -1 || idxLikes === -1) return [];
+
+	const posts: LinkedInPost[] = [];
+
+	for (let i = 1; i < rows.length; i++) {
+		const rowStr = rows[i];
+		if (!rowStr || !rowStr.trim()) continue;
+
+		const cols = parseCsvRow(rowStr);
+
+		// Text field may be quoted and contain commas, so don't trim it
+		// (parseCsvRow already preserves quoted fields and trims non-quoted ones)
+		const text = (cols[idxText] ?? '').trim();
+		const date = (cols[idxDate] ?? '').trim();
+		const url = (cols[idxLink] ?? '').trim();
+		const likesRaw = (cols[idxLikes] ?? '').trim();
+
+		// Skip rows that don't look like posts
+		if (!text && !url) continue;
+
+		const likes = Number.isFinite(Number(likesRaw)) ? parseInt(likesRaw, 10) : 0;
+
+		posts.push({
+			text,
+			date,
+			url,
+			likes: Number.isNaN(likes) ? 0 : likes,
+		});
+	}
+
+	return posts;
+}
+
+/**
+ * Splits CSV content into row strings, respecting quoted fields that may contain newlines.
+ */
+function splitCsvRows(csv: string): string[] {
+	const rows: string[] = [];
+	let cur = '';
+	let inQuotes = false;
+
+	// Normalize line endings
+	const s = csv.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+	for (let i = 0; i < s.length; i++) {
+		const ch = s[i];
+
+		if (ch === '"') {
+			// If we're in quotes and the next char is a quote, it's an escaped quote ("")
+			// Preserve both quotes so parseCsvRow can handle the escaping
+			if (inQuotes && s[i + 1] === '"') {
+				cur += '""';
+				i++; // Skip the next quote since we've added both
+			} else {
+				// Preserve the quote character in the output
+				cur += '"';
+				inQuotes = !inQuotes;
+			}
+			continue;
+		}
+
+		if (ch === '\n' && !inQuotes) {
+			rows.push(cur);
+			cur = '';
+			continue;
+		}
+
+		cur += ch;
+	}
+
+	// Add last row if non-empty or if file ends without newline
+	if (cur.length > 0) rows.push(cur);
+
+	// Trim off trailing empty lines
+	while (rows.length > 0 && rows[rows.length - 1].trim() === '') rows.pop();
+
+	return rows;
+}
+
+/**
+ * Parses one CSV row into fields, respecting quoted fields and commas.
+ * Assumes the row string does not include the terminating newline.
+ */
+function parseCsvRow(row: string): string[] {
+	const out: string[] = [];
+	let cur = '';
+	let inQuotes = false;
+	const fieldQuoted: boolean[] = [];
+	let fieldIndex = 0;
+
+	for (let i = 0; i < row.length; i++) {
+		const ch = row[i];
+
+		if (ch === '"') {
+			// Escaped quote inside a quoted field
+			if (inQuotes && row[i + 1] === '"') {
+				cur += '"';
+				i++; // Skip the next quote
+			} else {
+				if (!inQuotes) {
+					// Starting a quoted field
+					fieldQuoted[fieldIndex] = true;
+				}
+				inQuotes = !inQuotes;
+			}
+			continue;
+		}
+
+		if (ch === ',' && !inQuotes) {
+			// Field complete - only trim if field was not quoted
+			const value = fieldQuoted[fieldIndex] ? cur : cur.trim();
+			out.push(value);
+			cur = '';
+			fieldIndex++;
+			continue;
+		}
+
+		cur += ch;
+	}
+
+	// Push last field
+	const value = fieldQuoted[fieldIndex] ? cur : cur.trim();
+	out.push(value);
+
+	return out;
+}
+
+function findHeaderIndex(header: string[], candidates: string[]): number {
+	const normalizedHeader = header.map((h) => normalizeHeader(h));
+	const normalizedCandidates = candidates.map((c) => normalizeHeader(c));
+
+	for (const cand of normalizedCandidates) {
+		const idx = normalizedHeader.indexOf(cand);
+		if (idx !== -1) return idx;
+	}
+
+	// Also allow "contains" matching (useful for long column names)
+	for (let i = 0; i < normalizedHeader.length; i++) {
+		for (const cand of normalizedCandidates) {
+			if (normalizedHeader[i].includes(cand)) return i;
+		}
+	}
+
+	return -1;
+}
+
+function normalizeHeader(s: string): string {
+	return s
+		.toLowerCase()
+		.replace(/\uFEFF/g, '') // BOM
+		.replace(/\s+/g, ' ')
+		.trim();
+}
