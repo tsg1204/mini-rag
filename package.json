@@ -13,6 +13,7 @@
 		"estimate-costs": "npx ts-node app/scripts/estimate-training-cost.ts",
 		"train": "npx ts-node app/scripts/upload-training-data.ts",
 		"upload-articles": "npx ts-node app/scripts/upload-articles.ts",
+		"upload-linkedin-posts": "npx ts-node app/scripts/upload-linkedin-posts.ts",
 		"scrape-content": "curl http://localhost:3000/api/scrape-content",
 		"process-csv": "npx ts-node app/scripts/processCsvAndVectorize.ts",
 		"upload-vectors": "npx ts-node app/scripts/upload-vectors.ts",

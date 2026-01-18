@@ -22,7 +22,7 @@ dotenv.config();
 import fs from 'fs';
 import path from 'path';
 import { QdrantClient } from '@qdrant/js-client-rest';
-import { extraMediumArticle, chunkText, Chunk, extractLinkedInPosts } from '../libs/chunking';
+import { extraMediumArticle, chunkText, Chunk } from '../libs/chunking';
 import { openaiClient } from '../libs/openai/openai';
 
 
