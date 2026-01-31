@@ -231,7 +231,7 @@ async function main() {
 
 	// Initialize Qdrant client
 	const qdrantClient = initializeQdrantClient();
-	const collectionName = process.env.QDRANT_COLLECTION || 'medium_articles';
+	const collectionName = process.env.QDRANT_COLLECTION_ARTICLES || 'medium_articles';
 
 	console.log('🚀 Starting article upload process...\n');
 	console.log(`🔗 Qdrant URL: ${process.env.QDRANT_URL || 'http://localhost:6333'}`);

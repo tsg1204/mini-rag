@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 
 export default function Home() {
 	const [input, setInput] = useState('');
@@ -16,6 +15,13 @@ export default function Home() {
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 
 	const [uploadContent, setUploadContent] = useState('');
+	const [uploadType, setUploadType] = useState<'post' | 'article'>('article');
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const [metadata, setMetadata] = useState<Record<string, any>>({
+		title: '',
+		url: '',
+		date: new Date().toISOString(),
+	});
 	const [isUploading, setIsUploading] = useState(false);
 	const [uploadStatus, setUploadStatus] = useState('');
 
@@ -24,20 +30,27 @@ export default function Home() {
 
 		setIsUploading(true);
 		setUploadStatus('');
+		setMetadata({
+			title: '',
+			url: '',
+			date: new Date().toISOString(),
+		});
 
 		try {
 			const response = await fetch('/api/upload-document', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ text: uploadContent }),
+				body: JSON.stringify({
+					text: uploadContent,
+					type: uploadType,
+					metadata,
+				}),
 			});
 
 			const data = await response.json();
 
 			if (response.ok) {
-				setUploadStatus(
-					`Success! Uploaded ${data.vectorsUploaded} vectors from ${data.chunksCreated} chunks`
-				);
+				setUploadStatus('Success! Uploaded content');
 				setUploadContent('');
 			} else {
 				setUploadStatus(`Error: ${data.error}`);
@@ -63,7 +76,7 @@ export default function Home() {
 
 		// Add user message to UI
 		const userMessage = {
-			id: uuidv4(),
+			id: crypto.randomUUID(),
 			role: 'user' as const,
 			content: userInput,
 		};
@@ -107,7 +120,7 @@ export default function Home() {
 			}
 
 			// Create a new assistant message
-			const assistantMessageId = uuidv4();
+			const assistantMessageId = crypto.randomUUID();
 			setMessages((prev) => [
 				...prev,
 				{
@@ -155,8 +168,9 @@ export default function Home() {
 			<div className='mb-8 p-4 border rounded'>
 				<h2 className='text-xl font-semibold mb-4'>Upload Content</h2>
 				<p className='text-sm text-gray-600 mb-4'>
-					Paste text content below to add it to your knowledge base. The text
-					will be chunked, embedded, and stored in Pinecone for retrieval.
+					Paste text content below to add it to your knowledge base.
+					The text will be chunked, embedded, and stored in Qdrant for
+					retrieval.
 				</p>
 
 				<textarea
@@ -168,10 +182,48 @@ This can be documentation, articles, or any text you want to query later.'
 					className='w-full p-2 border rounded mb-2 h-32'
 					disabled={isUploading}
 				/>
+				<select
+					value={uploadType}
+					onChange={(e) =>
+						setUploadType(e.target.value as 'post' | 'article')
+					}
+				>
+					<option value='post'>Post</option>
+					<option value='article'>Article</option>
+				</select>
+				<div className='mb-8'>
+					<p className='text-sm text-gray-600 mb-4'>
+						Enter the metadata for the content you want to upload.
+					</p>
+					<input
+						placeholder='Enter the title of the content...'
+						type='text'
+						value={metadata.title}
+						onChange={(e) =>
+							setMetadata({ ...metadata, title: e.target.value })
+						}
+					/>
+					<input
+						placeholder='Enter the URL of the content...'
+						type='text'
+						value={metadata.url}
+						onChange={(e) =>
+							setMetadata({ ...metadata, url: e.target.value })
+						}
+					/>
+					<input
+						placeholder='Enter the date of the content...'
+						type='date'
+						value={metadata.date}
+						onChange={(e) =>
+							setMetadata({ ...metadata, date: e.target.value })
+						}
+					/>
+				</div>
 				<button
 					onClick={handleUpload}
 					disabled={isUploading || !uploadContent.trim()}
-					className='px-4 py-2 bg-blue-600 text-white rounded disabled:bg-gray-400'
+					className='px-4 py-2 bg-blue-600 text-black rounded disabled:bg-gray-400'
 				>
 					{isUploading ? 'Uploading...' : 'Upload Text'}
 				</button>
@@ -189,7 +241,8 @@ This can be documentation, articles, or any text you want to query later.'
 						<div className='text-gray-500 text-center py-8'>
 							<p className='mb-2'>Welcome to Mini RAG!</p>
 							<p className='text-sm'>
-								Upload some text above, then ask questions about it.
+								Upload some text above, then ask questions about
+								it.
 							</p>
 						</div>
 					)}
@@ -203,9 +256,13 @@ This can be documentation, articles, or any text you want to query later.'
 							}`}
 						>
 							<p className='font-semibold mb-1'>
-								{message.role === 'user' ? 'You' : 'AI Assistant'}
+								{message.role === 'user'
+									? 'You'
+									: 'AI Assistant'}
 							</p>
-							<div className='whitespace-pre-wrap'>{message.content}</div>
+							<div className='whitespace-pre-wrap'>
+								{message.content}
+							</div>
 						</div>
 					))}
 					{isStreaming && !messages[messages.length - 1]?.content && (
@@ -227,7 +284,7 @@ This can be documentation, articles, or any text you want to query later.'
 					<button
 						type='submit'
 						disabled={isStreaming || !input.trim()}
-						className='px-6 py-2 bg-green-600 text-white rounded disabled:bg-gray-400'
+						className='px-6 py-2 bg-green-600 text-black rounded disabled:bg-gray-400'
 					>
 						{isStreaming ? 'Sending...' : 'Send'}
 					</button>

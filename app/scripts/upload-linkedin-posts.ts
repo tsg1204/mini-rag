@@ -202,7 +202,7 @@ async function main() {
 	}
 
 	const qdrantClient = initializeQdrantClient();
-	const collectionName = 'linkedin';
+	const collectionName = process.env.QDRANT_COLLECTION_LINKEDIN || 'linkedin';
 
 	console.log('🚀 Starting LinkedIn posts upload...\n');
 	console.log(`🔗 Qdrant URL: ${process.env.QDRANT_URL || 'http://localhost:6333'}`);
